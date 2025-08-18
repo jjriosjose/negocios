@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Negocios RD – v23 (fuzzy + país + Google Maps)</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <style>
+    :root{ --bg:#f7fafc; --card:#ffffff; --muted:#64748b; --text:#0b1220; --border:#e5e9f2; --chip:#eef2f7; --accent:#10b981; --warn:#ef4444; }
+    *{box-sizing:border-box}
+    body{margin:0; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:linear-gradient(180deg,#f6f8fc 0%, #eef2f7 100%); color:var(--text);}
+    .container{max-width:1200px; margin:0 auto; padding:16px;}
+    .title{display:flex; align-items:center; gap:10px; margin:0 0 10px;}
+    .badge{background:var(--chip); color:#475569; border:1px solid #e2e8f0; padding:3px 8px; border-radius:999px; font-size:12px;}
+    .card{background:var(--card); border:1px solid var(--border); border-radius:16px; padding:12px; box-shadow:0 6px 16px rgba(15,23,42,.06);}
+    .muted{color:var(--muted); font-size:12px;}
+    .grid{display:grid; gap:12px;}
+    .grid-4{grid-template-columns: repeat(4, minmax(0, 1fr));}
+    select,input[type="text"],button{width:100%; padding:10px; border-radius:12px; border:1px solid #d7dde8; background:#fff; color:#0b1220; outline:none;}
+    button{cursor:pointer; font-weight:600;}
+    .btn{border:1px solid #dbe1ea; background:#ffffff;}
+    .btn-primary{background: linear-gradient(135deg, var(--accent), #14b8a6); border:0; color:#ffffff;}
+    #map{width:100%; height:64vh; border-radius:14px; border:1px solid #dbe1ea; background:#eef2f7;}
+    .table-wrap{max-height:55vh; overflow:auto; border-radius:12px; border:1px solid var(--border);}
+    table{width:100%; border-collapse:collapse; font-size:12px; table-layout:fixed;}
+    th, td{padding:8px 10px; border-bottom:1px solid #eef2f7; text-align:left; vertical-align:top; word-wrap:break-word; overflow-wrap:break-word; white-space:normal;}
+    th{position:sticky; top:0; background:#f4f7fb; color:#64748b; z-index:1;}
+    .errbar,.okbar{position:fixed; left:8px; right:8px; bottom:8px; padding:8px 10px; border-radius:12px; display:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; z-index:9999;}
+    .errbar{background:#fde8e8; border:1px solid #f8b4b4; color:#7f1d1d;}
+    .okbar{background:#ecfdf5; border:1px solid #a7f3d0; color:#065f46;}
+    .progress{height:10px; background:#eef2f7; border-radius:999px; overflow:hidden; border:1px solid #e5e9f2;}
+    .progress > div{height:100%; width:0%; background:linear-gradient(90deg,#10b981,#14b8a6); transition:width .25s;}
+    textarea{width:100%; min-height:120px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size:12px; background:#0b1220; color:#e8eef9; border-radius:10px; border:1px solid #1f2937; padding:8px; display:none;}
+    .chips{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+    .pill{font-size:11px; padding:2px 6px; border-radius:999px; border:1px solid #e2e8f0; background:#f8fafc; color:#334155;}
+    .a{color:#0ea5e9; text-decoration:none;} .a:hover{text-decoration:underline;}
+    details.results{border:1px solid var(--border); border-radius:16px; background:var(--card); box-shadow:0 6px 16px rgba(15,23,42,.06); padding:0;}
+    details.results > summary{list-style:none; cursor:pointer; padding:12px 14px; display:flex; justify-content:space-between; align-items:center; gap:10px; border-bottom:1px solid var(--border);}
+    details.results > summary::-webkit-details-marker{display:none}
+    .caret{transition:transform .2s ease;} details[open] .caret{transform:rotate(90deg);}
+    .summary-right{display:flex; gap:8px; align-items:center;}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="title">
+      <h2 style="margin:0">Negocios RD</h2>
+      <span class="badge">“Cualquier palabra” + país completo + rutas Google</span>
+      <span class="badge">100% gratis · GitHub Pages</span>
+      <span id="src" class="pill" title="mirror Overpass usado"></span>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card">
+      <div class="grid grid-4">
+        <div>
+          <label class="muted">Tipo / palabra libre</label>
+          <input id="qTipo" type="text" placeholder="Ej.: constructoras, concreteras, supermercados, tiendas de chinos… o 'todos'"/>
+        </div>
+        <div>
+          <label class="muted">Provincia (opcional)</label>
+          <select id="selProv"><option value="">(todo el país)</option></select>
+        </div>
+        <div>
+          <label class="muted">Municipio (opcional)</label>
+          <select id="selMuni"><option value="">(todos)</option></select>
+        </div>
+        <div style="display:flex; align-items:end; gap:8px;">
+          <button id="btnBuscar" class="btn btn-primary" style="flex:1">🔎 Buscar</button>
+          <button id="btnCSV" class="btn" style="flex:1">⬇ CSV</button>
+        </div>
+      </div>
+      <div class="chips" style="margin-top:8px">
+        <div class="progress" style="flex:1; min-width:160px;"><div id="pbar"></div></div>
+        <span id="status" class="muted">Listo</span>
+        <label><input type="checkbox" id="cbCluster" checked/> Clustering</label>
+        <label><input type="checkbox" id="cbRapido"/> Modo rápido</label>
+        <label class="muted">Filtro:</label>
+        <label><input type="checkbox" id="cbTel"/> Con teléfono</label>
+        <label><input type="checkbox" id="cbWeb"/> Con web</label>
+        <button id="btnGPS" class="btn" title="Usar mi ubicación para rutas">📍 GPS</button>
+        <button id="btnVerQL" class="btn">👀 Ver consulta</button>
+        <button id="btnDemo" class="btn">✨ Demo</button>
+      </div>
+      <div class="muted" style="margin-top:6px;">Vacía <b>Provincia</b> para buscar en todo el país. El buscador tolera plurales, acentos y espacios: <i>ferreterias</i> ≈ <i>ferretería</i>, <i>super mercado</i> ≈ <i>supermercado</i>, etc.</div>
+      <textarea id="ql"></textarea>
+    </div>
+
+    <!-- Mapa arriba, lista debajo -->
+    <div class="grid" style="grid-template-columns: 1fr; margin-top:10px;">
+      <div class="card"><div id="map"></div></div>
+      <details id="resPanel" class="results" open>
+        <summary>
+          <div class="summary-right">
+            <span class="badge">Resultados: <span id="statCount">0</span></span>
+            <span class="badge">Fuente: OpenStreetMap</span>
+          </div>
+          <span class="muted" style="display:flex; align-items:center; gap:6px;">Lista <span class="caret">▶</span></span>
+        </summary>
+        <div class="table-wrap">
+          <table id="tbl">
+            <thead>
+              <tr>
+                <th>Nombre</th><th>Tipo</th><th>Dirección</th><th>Teléfono</th><th>Web</th><th>Marca</th><th>Operador</th><th>Horario</th><th>Ruta</th><th>Lat</th><th>Lon</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+  </div>
+  <div id="err" class="errbar"></div><div id="ok" class="okbar"></div>
+
+<script>
+// ====== Datos administrativos ======
+const PROVINCIAS=["Azua","Bahoruco","Barahona","Dajabón","Distrito Nacional","Duarte","El Seibo","Elías Piña","Espaillat","Hato Mayor","Hermanas Mirabal","Independencia","La Altagracia","La Romana","La Vega","María Trinidad Sánchez","Monseñor Nouel","Monte Cristi","Monte Plata","Pedernales","Peravia","Puerto Plata","Samaná","San Cristóbal","San José de Ocoa","San Juan","San Pedro de Macorís","Sánchez Ramírez","Santiago","Santiago Rodríguez","Santo Domingo","Valverde"];
+const MUNICIPIOS={"Azua":["Azua de Compostela","Estebanía","Guayabal","Las Charcas","Las Yayas de Viajama","Padre Las Casas","Peralta","Pueblo Viejo","Sabana Yegua","Tábara Arriba"],"Bahoruco":["Neiba","Galván","Los Ríos","Tamayo","Villa Jaragua"],"Barahona":["Barahona","Cabral","El Peñón","Enriquillo","Fundación","Jaquimeyes","La Ciénaga","Las Salinas","Paraíso","Polo","Vicente Noble"],"Dajabón":["Dajabón","El Pino","Loma de Cabrera","Partido","Restauración"],"Distrito Nacional":["Santo Domingo de Guzmán"],"Duarte":["San Francisco de Macorís","Arenoso","Castillo","Eugenio María de Hostos","Las Guáranas","Pimentel","Villa Riva"],"El Seibo":["Santa Cruz de El Seibo","Miches"],"Elías Piña":["Comendador","Bánica","El Llano","Hondo Valle","Juan Santiago","Pedro Santana"],"Espaillat":["Moca","Cayetano Germosén","Gaspar Hernández","Jamao al Norte"],"Hato Mayor":["Hato Mayor del Rey","El Valle","Sabana de la Mar"],"Hermanas Mirabal":["Salcedo","Tenares","Villa Tapia"],"Independencia":["Jimaní","Cristóbal","Duvergé","La Descubierta","Mella","Postrer Río"],"La Altagracia":["Salvaleón de Higüey","San Rafael del Yuma"],"La Romana":["La Romana","Guaymate","Villa Hermosa"],"La Vega":["La Vega","Constanza","Jarabacoa","Jima Abajo"],"María Trinidad Sánchez":["Nagua","Cabrera","El Factor","Río San Juan"],"Monseñor Nouel":["Bonao","Maimón","Piedra Blanca"],"Monte Cristi":["San Fernando de Monte Cristi","Castañuelas","Guayubín","Las Matas de Santa Cruz","Pepillo Salcedo","Villa Vásquez"],"Monte Plata":["Monte Plata","Bayaguana","Peralvillo","Sabana Grande de Boyá","Yamasá"],"Pedernales":["Pedernales","Oviedo"],"Peravia":["Baní","Nizao"],"Puerto Plata":["San Felipe de Puerto Plata","Altamira","Guananico","Imbert","Los Hidalgos","Luperón","Sosúa","Villa Isabela","Montellano"],"Samaná":["Santa Bárbara de Samaná","Sánchez","Las Terrenas"],"San Cristóbal":["San Cristóbal","Bajos de Haina","Cambita Garabitos","Los Cacaos","Sabana Grande de Palenque","San Gregorio de Nigua","Villa Altagracia","Yaguate"],"San José de Ocoa":["San José de Ocoa","Sabana Larga","Rancho Arriba"],"San Juan":["San Juan de la Maguana","Bohechío","El Cercado","Juan de Herrera","Las Matas de Farfán","Vallejuelo"],"San Pedro de Macorís":["San Pedro de Macorís","Consuelo","Guayacanes","Quisqueya","Ramón Santana","San José de los Llanos"],"Sánchez Ramírez":["Cotuí","Cevicos","Fantino","La Mata"],"Santiago":["Santiago de los Caballeros","Bisonó (Navarrete)","Jánico","Licey al Medio","Puñal","Sabana Iglesia","San José de las Matas","Tamboril","Villa González"],"Santiago Rodríguez":["San Ignacio de Sabaneta","Los Almácigos","Monción"],"Santo Domingo":["Santo Domingo Este","Santo Domingo Norte","Santo Domingo Oeste","Boca Chica","San Antonio de Guerra","Los Alcarrizos","Pedro Brand"],"Valverde":["Mao","Esperanza","Laguna Salada"]};
+
+// ====== Sinónimos ampliados ======
+const KEYMAP={
+ 'constructoras':[{'k':'craft','v':'builder'},{'k':'office','v':'company'}],
+ 'constructora':[{'k':'craft','v':'builder'},{'k':'office','v':'company'}],
+ 'supermercado':[{'k':'shop','v':'supermarket'}],
+ 'super-mercado':[{'k':'shop','v':'supermarket'}],
+ 'super mercado':[{'k':'shop','v':'supermarket'}],
+ 'tienda de chinos':[{'k':'name','v':'chino'}],
+ 'tiendas de chinos':[{'k':'name','v':'chino'}],
+ 'concretera':[/* no tag estándar → caerá a texto libre */],
+ 'concreteras':[/* idem */],
+ 'ferreteria':[{'k':'shop','v':'hardware'},{'k':'shop','v':'doityourself'},{'k':'shop','v':'construction_supplies'}],
+ 'ferretería':[{'k':'shop','v':'hardware'},{'k':'shop','v':'doityourself'},{'k':'shop','v':'construction_supplies'}],
+ 'farmacia':[{'k':'amenity','v':'pharmacy'},{'k':'shop','v':'chemist'}],
+ 'gomeria':[{'k':'shop','v':'tyres'}],'gomera':[{'k':'shop','v':'tyres'}],
+ 'lavadero':[{'k':'amenity','v':'car_wash'}]
+};
+
+// ====== Claves texto libre muy amplias ======
+const FREE_KEYS=["name","alt_name","short_name","official_name","brand","operator","description","shop","amenity","craft","office","tourism","leisure","healthcare","cuisine","man_made","industrial","sport","product","subject"];
+
+// Amenidades genéricas para “todos”
+const BUSINESS_AMENITIES=["bank","bar","cafe","car_rental","car_wash","clinic","dentist","doctor","fast_food","fuel","hairdresser","hospital","ice_cream","internet_cafe","optician","pharmacy","post_office","pub","restaurant","telecommunication","theatre","veterinary"];
+
+// ====== Estado/Red ======
+const OVERPASS=["https://lz4.overpass-api.de/api/interpreter","https://z.overpass-api.de/api/interpreter","https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter","https://overpass.openstreetmap.fr/api/interpreter"];
+const WRAPS=["https://r.jina.ai/http://","https://r.jina.ai/https://"];
+const STATE={map:null,cluster:null,markers:[],feats:[],lastQL:'',server:'',me:null};
+
+// ====== Utils ======
+function showErr(m){const e=document.getElementById('err'); e.textContent=m; e.style.display='block'; setTimeout(()=>e.style.display='none',6000);}
+function showOk(m){const e=document.getElementById('ok'); e.textContent=m; e.style.display='block'; setTimeout(()=>e.style.display='none',2000);}
+function setStatus(t,p=null){document.getElementById('status').textContent=t; if(p!=null) document.getElementById('pbar').style.width=Math.min(100,Math.max(0,p))+'%';}
+function setBusy(b){document.querySelectorAll('button,select,input').forEach(el=>el.disabled=!!b);}
+function norm(s){return (s||'').toString().trim().toLowerCase();}
+function strip(s){return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
+function esc(s){return (s||'').replace(/[.*+?^${}()|[\\]\\]/g,'\\$&');}
+function shortHost(u){try{const url=new URL(u);return url.hostname;}catch{return u;}}
+
+// Mapa
+function initMap(){ if(STATE.map) return; const RD=[18.735693,-70.162651]; STATE.map=L.map('map').setView(RD,8); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap'}).addTo(STATE.map); }
+function ensureCluster(){ if(!STATE.cluster){ STATE.cluster=L.markerClusterGroup({showCoverageOnHover:false,maxClusterRadius:50}); STATE.map.addLayer(STATE.cluster);} }
+function clearMarkers(){ if(STATE.cluster){STATE.cluster.clearLayers();} (STATE.markers||[]).forEach(m=>{try{STATE.map.removeLayer(m);}catch{}}); STATE.markers=[]; }
+function addMarker(lat,lon,props){ const m=L.marker([lat,lon]); const web=props.website?`<div>Web: <a class="a" href="${props.website}" target="_blank" rel="noopener">${props.website}</a></div>`:''; const tel=props.phone?`<div>Tel: ${props.phone}</div>`:''; const route=`<div><a class="a" href="#" onclick="routeTo(${lat},${lon});return false;">🧭 Cómo llegar (Google)</a></div>`; m.bindPopup(`<strong>${props.name||'(sin nombre)'}</strong><div class="muted">${props.tipo||''}</div><div>${props.address||''}</div>${tel}${web}${route}`); STATE.markers.push(m); if(document.getElementById('cbCluster').checked){ensureCluster(); STATE.cluster.addLayer(m);} else m.addTo(STATE.map); }
+
+// ====== Overpass QL builders ======
+function header(){ return "[out:json][timeout:30];"; }
+function areaCountry(){ return `${header()}area["ISO3166-1"="DO"]->.a; out ids bb;`; }
+function areaByName(name){ const rx=esc(name); return `${header()}
+area["ISO3166-1"="DO"]->.country;
+rel(area.country)["boundary"="administrative"]["name"~"^${rx}$", i];
+out ids bb;`; }
+function blockOut(body, rapido){ const lim=rapido?' 300':''; return `(
+${body}
+);
+out center${lim};`; }
+
+// Regex con tolerancia: acentos, espacios, plurales
+function accentFoldRegex(s){
+  const map = {a:'[aáàäâ]', e:'[eéèëê]', i:'[iíìïî]', o:'[oóòöô]', u:'[uúùüû]', n:'[nñ]'};
+  return s.split('').map(ch=>{
+    const c=strip(ch);
+    if(map[c]) return map[c];
+    if(/[a-z0-9]/.test(c)) return c;
+    return '.*'; // espacios/guiones → comodín
+  }).join('');
+}
+function makeRegexFromQuery(q){
+  let base = strip(q.toLowerCase());
+  base = base.replace(/[^a-z0-9]+/g,' '); // normalizar separadores
+  const tokens = base.split(/\s+/).filter(Boolean);
+  if(!tokens.length) return '.*';
+  // unir tokens con .* para permitir cualquier cosa entre medio
+  let core = tokens.map(t=>accentFoldRegex(t)).join('.*');
+  // plural opcional al final (s|es)
+  core += '(e?s)?';
+  return core;
+}
+
+function byBBoxTagsOrName(q, tags, b, rapido){
+  // combina: tags específicos OR texto libre flexible
+  const s=b.minlat,w=b.minlon,n=b.maxlat,e=b.maxlon;
+  const rx=makeRegexFromQuery(q);
+  const parts=[];
+  if(tags && tags.length){
+    parts.push(tags.map(t=>`node["${t.k}"="${t.v}"](${s},${w},${n},${e}); way["${t.k}"="${t.v}"](${s},${w},${n},${e}); relation["${t.k}"="${t.v}"](${s},${w},${n},${e});`).join('\n'));
+  }
+  const free = [`node["name"~"${rx}",i](${s},${w},${n},${e});`,`way["name"~"${rx}",i](${s},${w},${n},${e});`,`relation["name"~"${rx}",i](${s},${w},${n},${e});`]
+    .concat(FREE_KEYS.filter(k!=="name").map(k=>`node["${k}"~"${rx}", i](${s},${w},${n},${e}); way["${k}"~"${rx}", i](${s},${w},${n},${e}); relation["${k}"~"${rx}", i](${s},${w},${n},${e});`)).join('\n');
+  parts.push(free);
+  return header()+blockOut(parts.join('\n'),rapido);
+}
+
+function byBBoxAll(b,rapido){ const s=b.minlat,w=b.minlon,n=b.maxlat,e=b.maxlon; const amen=BUSINESS_AMENITIES.map(v=>`node["amenity"="${v}"](${s},${w},${n},${e}); way["amenity"="${v}"](${s},${w},${n},${e}); relation["amenity"="${v}"](${s},${w},${n},${e});`).join('\n'); const shops=`node["shop"](${s},${w},${n},${e}); way["shop"](${s},${w},${n},${e}); relation["shop"](${s},${w},${n},${e});`; const office=`node["office"](${s},${w},${n},${e}); way["office"](${s},${w},${n},${e}); relation["office"](${s},${w},${n},${e});`; return header()+blockOut(amen+'\n'+shops+'\n'+office,rapido); }
+
+function aroundTagsOrName(q,tags,c,r,rapido){
+  const rx=makeRegexFromQuery(q);
+  const parts=[];
+  if(tags && tags.length){
+    parts.push(tags.map(t=>`node(around:${r},${c.lat},${c.lon})["${t.k}"="${t.v}"]; way(around:${r},${c.lat},${c.lon})["${t.k}"="${t.v}"]; relation(around:${r},${c.lat},${c.lon})["${t.k}"="${t.v}"];`).join('\n'));
+  }
+  const free=`node(around:${r},${c.lat},${c.lon})["name"~"${rx}",i]; way(around:${r},${c.lat},${c.lon})["name"~"${rx}",i]; relation(around:${r},${c.lat},${c.lon})["name"~"${rx}",i];
+${FREE_KEYS.filter(k!=="name").map(k=>`node(around:${r},${c.lat},${c.lon})["${k}"~"${rx}", i]; way(around:${r},${c.lat},${c.lon})["${k}"~"${rx}", i]; relation(around:${r},${c.lat},${c.lon})["${k}"~"${rx}", i];`).join('\n')}`;
+  parts.push(free);
+  return header()+blockOut(parts.join('\n'),rapido);
+}
+
+// Helpers bbox
+function expandBBox(b, pad=0.28){return {minlat:b.minlat-pad, minlon:b.minlon-pad, maxlat:b.maxlat+pad, maxlon:b.maxlon+pad};}
+function centerOf(b){return {lat:(b.minlat+b.maxlat)/2, lon:(b.minlon+b.maxlon)/2};}
+
+// ====== Transformación/tabla ======
+function usableCount(json){let c=0;const els=(json&&json.elements)||[];for(const el of els){const lat=el.lat||(el.center&&el.center.lat);const lon=el.lon||(el.center&&el.center.lon);if(lat!=null&&lon!=null)c++;}return c;}
+function pushResults(json){
+  const telReq=document.getElementById('cbTel').checked;
+  const webReq=document.getElementById('cbWeb').checked;
+  const els=(json&&json.elements)||[];
+  for(const el of els){
+    const lat=el.lat||(el.center&&el.center.lat);
+    const lon=el.lon||(el.center&&el.center.lon);
+    if(lat==null||lon==null) continue;
+    const t=el.tags||{};
+    const phone=t['phone']||t['contact:phone']||'';
+    const website=t['website']||t['contact:website']||'';
+    if(telReq && !phone) continue;
+    if(webReq && !website) continue;
+    STATE.feats.push({
+      name:t.name||'', tipo:t.shop||t.amenity||t.craft||t.office||t.tourism||t.leisure||t.healthcare||'',
+      address:[t['addr:street'],t['addr:housenumber']].filter(Boolean).join(' ')||t['addr:full']||'',
+      phone, website, brand:t.brand||'', operator:t.operator||'', hours:t.opening_hours||'',
+      lat:+lat, lon:+lon
+    });
+  }
+}
+
+// ====== Red ======
+async function fetchAny(u){ const r=await fetch(u,{headers:{'Accept':'application/json'}}); if(!r.ok) throw new Error('HTTP '+r.status); const txt=await r.text(); try{return JSON.parse(txt);}catch{throw new Error('No JSON');} }
+async function overpassAll(ql){
+  const short='?data='+encodeURIComponent(ql);
+  const primary=OVERPASS.map(b=>b+short);
+  const wrapped=[]; for(const w of WRAPS){ for(const b of OVERPASS){ wrapped.push(w+b.replace(/^https?:\/\//,'')+short);} }
+  const all=primary.concat(wrapped);
+  let last=null;
+  for(const u of all){ try{ const data=await fetchAny(u); STATE.server=u; document.getElementById('src').textContent=shortHost(u); return data; }catch(e){ last=e; } }
+  throw last||new Error('Overpass unreachable');
+}
+
+// ====== BBoxes ======
+const FALLBACK_RD_BBOX={minlat:17.35, minlon:-72.20, maxlat:20.10, maxlon:-68.00}; // cubre RD de sobra
+async function getCountryBBox(){
+  try{
+    const d=await overpassAll(areaCountry());
+    if(d && d.bounds) return d.bounds;
+    if(d && d.elements && d.elements[0] && d.elements[0].bounds) return d.elements[0].bounds;
+  }catch(e){ /* ignore */ }
+  return FALLBACK_RD_BBOX;
+}
+async function getBBox(name){
+  const q=areaByName(name); STATE.lastQL=q; document.getElementById('ql').value=q;
+  try{
+    const d=await overpassAll(q);
+    if(d && d.bounds) return d.bounds;
+    if(d && d.elements && d.elements[0] && d.elements[0].bounds) return d.elements[0].bounds;
+  }catch(e){ /* ignore */ }
+  // como respaldo usa bbox país y luego filtra por nombre en texto
+  return null;
+}
+
+// ====== Rutas (Google Maps siempre) ======
+function enableGPS(){
+  if(!navigator.geolocation){ showErr('GPS no disponible en este navegador.'); return; }
+  navigator.geolocation.getCurrentPosition(p=>{ STATE.me={lat:p.coords.latitude, lon:p.coords.longitude}; showOk('GPS activado'); }, _=>showErr('No se pudo obtener ubicación'), {enableHighAccuracy:true, timeout:8000});
+}
+async function routeTo(lat,lon){
+  // Google Maps Directions (usa ubicación actual automática del usuario)
+  const url=`https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}&travelmode=driving`;
+  window.open(url,'_blank','noopener');
+}
+window.routeTo=routeTo;
+
+// ====== Flujo ======
+document.addEventListener('DOMContentLoaded',()=>{
+  initMap();
+  const selP=document.getElementById('selProv'); selP.innerHTML='<option value="">(todo el país)</option>'+PROVINCIAS.map(p=>`<option value="${p}">${p}</option>`).join('');
+  selP.addEventListener('change',()=>{const l=MUNICIPIOS[selP.value]||[]; document.getElementById('selMuni').innerHTML='<option value="">(todos)</option>'+l.map(n=>`<option value="${n}">${n}</option>`).join('');});
+  document.getElementById('btnBuscar').addEventListener('click',buscar);
+  document.getElementById('btnCSV').addEventListener('click',()=>{ if(!STATE.feats.length) return showErr('No hay resultados.'); const headers=['name','tipo','address','phone','website','brand','operator','hours','lat','lon']; const csv=[headers.join(',')].concat(STATE.feats.map(r=>headers.map(h=>{const v=(r[h]??'').toString(); return (/[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v)}).join(','))).join('\n'); const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='negocios_rd.csv'; a.click(); });
+  document.getElementById('btnVerQL').addEventListener('click',()=>{ const t=document.getElementById('ql'); t.style.display=(t.style.display==='none'||t.style.display==='')?'block':'none'; });
+  document.getElementById('btnDemo').addEventListener('click',()=>{ document.getElementById('qTipo').value='constru ctoras'; buscar(); });
+  document.getElementById('btnGPS').addEventListener('click', enableGPS);
+});
+
+async function buscar(){
+  const tipo=norm(document.getElementById('qTipo').value);
+  const prov=document.getElementById('selProv').value;
+  const muni=document.getElementById('selMuni').value||'';
+  let rapido=document.getElementById('cbRapido').checked;
+  if(!tipo) return showErr('Escriba un término.');
+
+  setBusy(true); setStatus('Obteniendo área…',18); clearMarkers(); STATE.feats=[];
+
+  try{
+    // 1) BBox: municipio -> provincia -> país (con fallback fijo)
+    let bbox=null;
+    try{ if(muni) bbox=await getBBox(muni); }catch(e){ console.warn('bbox municipio',e); }
+    if(!bbox && prov) bbox=await getBBox(prov);
+    if(!bbox){ bbox=await getCountryBBox(); rapido=true; showOk('Buscando en todo el país'); }
+
+    // 2) Construcción de query combinada (tags mapeados OR texto libre con tolerancia)
+    const isAll=['todos','todo','negocios','*'].includes(tipo);
+    const mapped=KEYMAP[norm(tipo)] || KEYMAP[strip(tipo)];
+    let ql = isAll ? byBBoxAll(bbox,true) : byBBoxTagsOrName(tipo, mapped, bbox, rapido);
+
+    STATE.lastQL=ql; document.getElementById('ql').value=ql; setStatus('Consultando Overpass…',52);
+    let data=await overpassAll(ql); let added=usableCount(data);
+
+    if(!added){
+      const big=expandBBox(bbox, prov?0.25:0.15);
+      ql = isAll ? byBBoxAll(big,true) : byBBoxTagsOrName(tipo, mapped, big, rapido);
+      STATE.lastQL=ql; document.getElementById('ql').value=ql; setStatus('Ampliando área…',72);
+      data=await overpassAll(ql); added=usableCount(data);
+    }
+
+    if(!added){
+      const c=centerOf(bbox); const r=prov?35000:65000;
+      ql = aroundTagsOrName(tipo, mapped, c, r, true);
+      STATE.lastQL=ql; document.getElementById('ql').value=ql; setStatus('Barriendo por radio…',86);
+      data=await overpassAll(ql); added=usableCount(data);
+    }
+
+    pushResults(data);
+
+    const tb=document.querySelector('#tbl tbody'); tb.innerHTML=''; let bounds=[];
+    STATE.feats.forEach((f,i)=>{
+      const web = f.website ? `<a class="a" href="${f.website}" target="_blank" rel="noopener">${new URL(f.website).hostname||'web'}</a>` : '';
+      const tr=document.createElement('tr'); tr.innerHTML=`
+        <td>${f.name||''}</td>
+        <td>${f.tipo||''}</td>
+        <td>${f.address||''}</td>
+        <td>${f.phone||''}</td>
+        <td>${web}</td>
+        <td>${f.brand||''}</td>
+        <td>${f.operator||''}</td>
+        <td>${f.hours||''}</td>
+        <td><button class="btn" onclick="routeTo(${f.lat},${f.lon})">Ruta</button></td>
+        <td>${f.lat.toFixed(6)}</td>
+        <td>${f.lon.toFixed(6)}</td>`;
+      tr.style.cursor='pointer'; tr.addEventListener('click',()=>STATE.map.setView([f.lat,f.lon],17));
+      tb.appendChild(tr);
+      addMarker(f.lat,f.lon,f); bounds.push([f.lat,f.lon]);
+    });
+    document.getElementById('statCount').textContent=STATE.feats.length;
+    if(bounds.length){ STATE.map.fitBounds(bounds,{padding:[20,20]}); }
+    setStatus(STATE.feats.length?'Completado':'Sin resultados',100);
+    if(!STATE.feats.length) showErr('Sin datos en OSM para ese término/área.'); else showOk('Listo');
+  }catch(e){ console.error(e); showErr('Overpass/CORS: '+(e.message||e)); }
+  finally{ setBusy(false); setTimeout(()=>{document.getElementById('pbar').style.width='0%'; document.getElementById('status').textContent='Listo';},900); }
+}
+</script>
+</body>
+</html>
