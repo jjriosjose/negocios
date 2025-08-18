@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Negocios RD – 100% gratis (v15)</title>
+  <title>Negocios RD – 100% gratis (v16)</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
-  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.js"></script>
   <style>
     :root{ --bg:#f6f8fc; --card:#ffffff; --muted:#64748b; --text:#0b1220; --primary:#14b8a6; --border:#e5e9f2; --chip:#eef2f7; }
     *{box-sizing:border-box}
@@ -44,7 +44,7 @@
   <div class="container">
     <div class="title">
       <h2 style="margin:0">Negocios RD</h2>
-      <span class="badge">OSM + Overpass</span>
+      <span class="badge">OSM + Overpass (mirrors)</span>
       <span class="badge">100% gratis · GitHub Pages</span>
     </div>
 
@@ -75,7 +75,7 @@
         <button id="btnVerQL" class="btn">👀 Ver consulta</button>
         <button id="btnDemo" class="btn btn-ghost">✨ Demo</button>
       </div>
-      <div class="hint" style="margin-top:6px;">Tip: primero prueba por **provincia** (municipio vacío) — es más rápido y devuelve más.</div>
+      <div class="hint" style="margin-top:6px;">Consejo: primero busca por **provincia** (municipio vacío). Si un servidor Overpass falla, la app rota por otros.</div>
       <textarea id="ql"></textarea>
     </div>
 
@@ -101,8 +101,10 @@
 const PROVINCIAS = ["Azua","Bahoruco","Barahona","Dajabón","Distrito Nacional","Duarte","El Seibo","Elías Piña","Espaillat","Hato Mayor","Hermanas Mirabal","Independencia","La Altagracia","La Romana","La Vega","María Trinidad Sánchez","Monseñor Nouel","Monte Cristi","Monte Plata","Pedernales","Peravia","Puerto Plata","Samaná","San Cristóbal","San José de Ocoa","San Juan","San Pedro de Macorís","Sánchez Ramírez","Santiago","Santiago Rodríguez","Santo Domingo","Valverde"];
 const MUNICIPIOS = {"Azua":["Azua de Compostela","Estebanía","Guayabal","Las Charcas","Las Yayas de Viajama","Padre Las Casas","Peralta","Pueblo Viejo","Sabana Yegua","Tábara Arriba"],"Bahoruco":["Neiba","Galván","Los Ríos","Tamayo","Villa Jaragua"],"Barahona":["Barahona","Cabral","El Peñón","Enriquillo","Fundación","Jaquimeyes","La Ciénaga","Las Salinas","Paraíso","Polo","Vicente Noble"],"Dajabón":["Dajabón","El Pino","Loma de Cabrera","Partido","Restauración"],"Distrito Nacional":["Santo Domingo de Guzmán"],"Duarte":["San Francisco de Macorís","Arenoso","Castillo","Eugenio María de Hostos","Las Guáranas","Pimentel","Villa Riva"],"El Seibo":["Santa Cruz de El Seibo","Miches"],"Elías Piña":["Comendador","Bánica","El Llano","Hondo Valle","Juan Santiago","Pedro Santana"],"Espaillat":["Moca","Cayetano Germosén","Gaspar Hernández","Jamao al Norte"],"Hato Mayor":["Hato Mayor del Rey","El Valle","Sabana de la Mar"],"Hermanas Mirabal":["Salcedo","Tenares","Villa Tapia"],"Independencia":["Jimaní","Cristóbal","Duvergé","La Descubierta","Mella","Postrer Río"],"La Altagracia":["Salvaleón de Higüey","San Rafael del Yuma"],"La Romana":["La Romana","Guaymate","Villa Hermosa"],"La Vega":["La Vega","Constanza","Jarabacoa","Jima Abajo"],"María Trinidad Sánchez":["Nagua","Cabrera","El Factor","Río San Juan"],"Monseñor Nouel":["Bonao","Maimón","Piedra Blanca"],"Monte Cristi":["San Fernando de Monte Cristi","Castañuelas","Guayubín","Las Matas de Santa Cruz","Pepillo Salcedo","Villa Vásquez"],"Monte Plata":["Monte Plata","Bayaguana","Peralvillo","Sabana Grande de Boyá","Yamasá"],"Pedernales":["Pedernales","Oviedo"],"Peravia":["Baní","Nizao"],"Puerto Plata":["San Felipe de Puerto Plata","Altamira","Guananico","Imbert","Los Hidalgos","Luperón","Sosúa","Villa Isabela","Montellano"],"Samaná":["Santa Bárbara de Samaná","Sánchez","Las Terrenas"],"San Cristóbal":["San Cristóbal","Bajos de Haina","Cambita Garabitos","Los Cacaos","Sabana Grande de Palenque","San Gregorio de Nigua","Villa Altagracia","Yaguate"],"San José de Ocoa":["San José de Ocoa","Sabana Larga","Rancho Arriba"],"San Juan":["San Juan de la Maguana","Bohechío","El Cercado","Juan de Herrera","Las Matas de Farfán","Vallejuelo"],"San Pedro de Macorís":["San Pedro de Macorís","Consuelo","Guayacanes","Quisqueya","Ramón Santana","San José de los Llanos"],"Sánchez Ramírez":["Cotuí","Cevicos","Fantino","La Mata"],"Santiago":["Santiago de los Caballeros","Bisonó (Navarrete)","Jánico","Licey al Medio","Puñal","Sabana Iglesia","San José de las Matas","Tamboril","Villa González"],"Santiago Rodríguez":["San Ignacio de Sabaneta","Los Almácigos","Monción"],"Santo Domingo":["Santo Domingo Este","Santo Domingo Norte","Santo Domingo Oeste","Boca Chica","San Antonio de Guerra","Los Alcarrizos","Pedro Brand"],"Valverde":["Mao","Esperanza","Laguna Salada"]};
 
-// Overpass mirrors
+// Overpass mirrors (GET-first para evitar preflight)
 const OVERPASS = [
+  "https://lz4.overpass-api.de/api/interpreter",
+  "https://z.overpass-api.de/api/interpreter",
   "https://overpass-api.de/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
   "https://overpass.openstreetmap.fr/api/interpreter"
@@ -110,7 +112,7 @@ const OVERPASS = [
 
 const KEYMAP = {'colegio':[{k:'amenity',v:'school'}],'colegios':[{'k':'amenity','v':'school'}],'escuela':[{'k':'amenity','v':'school'}],'universidad':[{'k':'amenity','v':'university'}],'hospital':[{'k':'amenity','v':'hospital'}],'clinica':[{'k':'amenity','v':'clinic'}],'clínica':[{'k':'amenity','v':'clinic'}],'farmacia':[{'k':'amenity','v':'pharmacy'},{'k':'shop','v':'chemist'}],'ferreteria':[{'k':'shop','v':'hardware'},{'k':'shop','v':'doityourself'},{'k':'shop','v':'construction_supplies'}],'ferretería':[{'k':'shop','v':'hardware'},{'k':'shop','v':'doityourself'},{'k':'shop','v':'construction_supplies'}],'papeleria':[{'k':'shop','v':'stationery'},{'k':'shop','v':'office_supplies'}],'papelería':[{'k':'shop','v':'stationery'},{'k':'shop','v':'office_supplies'}],'supermercado':[{'k':'shop','v':'supermarket'}],'colmado':[{'k':'shop','v':'convenience'}],'taller':[{'k':'shop','v':'car_repair'}],'repuestos':[{'k':'shop','v':'car_parts'}],'zapateria':[{'k':'shop','v':'shoes'}],'zapatería':[{'k':'shop','v':'shoes'}],'muebles':[{'k':'shop','v':'furniture'}],'banco':[{'k':'amenity','v':'bank'}],'hotel':[{'k':'tourism','v':'hotel'}],'veterinaria':[{'k':'amenity','v':'veterinary'}]};
 
-const STATE = { map:null, cluster:null, markers:[], feats:[], lastQL:'' };
+const STATE = { map:null, cluster:null, markers:[], feats:[], lastQL:'', lastServer:'' };
 
 function showErr(m){const e=document.getElementById('err'); e.textContent=m; e.style.display='block'; setTimeout(()=>e.style.display='none',6000);}
 function showOk(m){const e=document.getElementById('ok'); e.textContent=m; e.style.display='block'; setTimeout(()=>e.style.display='none',2200);}
@@ -125,25 +127,39 @@ function ensureCluster(){ if(!STATE.cluster){ STATE.cluster=L.markerClusterGroup
 function clearMarkers(){ if(STATE.cluster){STATE.cluster.clearLayers();} (STATE.markers||[]).forEach(m=>{try{STATE.map.removeLayer(m);}catch{}}); STATE.markers=[]; }
 function addMarker(lat,lon,props){ const m=L.marker([lat,lon]); const web=props.website?`<div>Web: <a href="${props.website}" target="_blank" rel="noopener">${props.website}</a></div>`:''; const tel=props.phone?`<div>Tel: ${props.phone}</div>`:''; m.bindPopup(`<strong>${props.name||'(sin nombre)'}</strong><div class="muted">${props.tipo||''}</div><div>${props.address||''}</div>${tel}${web}`); STATE.markers.push(m); if(document.getElementById('cbCluster').checked){ensureCluster(); STATE.cluster.addLayer(m);} else m.addTo(STATE.map); }
 
-async function overpassFetch(query, timeoutMs=30000){
-  let lastErr=null;
+async function overpassFetch(query, timeoutMs=35000){
+  let lastErr=null; let serverUsed='';
   for(const base of OVERPASS){
     try{
+      // GET primero (evita preflight OPTIONS)
+      serverUsed = base;
+      const url = base + '?data=' + encodeURIComponent(query);
       const ctrl = new AbortController();
       const to = setTimeout(()=>ctrl.abort(), timeoutMs);
-      const r = await fetch(base, {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'}, body:'data='+encodeURIComponent(query), signal: ctrl.signal});
+      const r = await fetch(url, {method:'GET', mode:'cors', headers:{'Accept':'application/json'}, signal: ctrl.signal});
       clearTimeout(to);
-      if(r.ok){ return await r.json(); }
-      const rq = await fetch(base + '?data=' + encodeURIComponent(query));
-      if(rq.ok){ return await rq.json(); }
+      if(r.ok){
+        STATE.lastServer = base;
+        return await r.json();
+      }
+      // POST como plan B
+      const ctrl2 = new AbortController();
+      const to2 = setTimeout(()=>ctrl2.abort(), timeoutMs);
+      const r2 = await fetch(base, {method:'POST', mode:'cors', headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','Accept':'application/json'}, body:'data='+encodeURIComponent(query), signal: ctrl2.signal});
+      clearTimeout(to2);
+      if(r2.ok){
+        STATE.lastServer = base;
+        return await r2.json();
+      }
       lastErr = new Error('HTTP '+r.status);
-    }catch(e){ lastErr=e; }
+    }catch(e){
+      lastErr = e;
+    }
   }
-  throw lastErr || new Error('Overpass error');
+  throw new Error((lastErr && lastErr.message) ? (lastErr.message + ' (server: '+serverUsed+')') : 'Overpass error');
 }
 
 function qlHeader(){ return "[out:json][timeout:30];"; }
-
 function qlAreaByName(name){
   const rx = esc(name);
   return `${qlHeader()}
@@ -151,7 +167,6 @@ area["ISO3166-1"="DO"]->.country;
 rel(area.country)["boundary"="administrative"]["name"~"^${rx}$", i];
 out ids bb;`;
 }
-
 function qlByBBoxTags(tags, bbox, rapido){
   const s=bbox.minlat, w=bbox.minlon, n=bbox.maxlat, e=bbox.maxlon;
   const lim = rapido? ' 300' : '';
@@ -174,17 +189,35 @@ function qlByBBoxName(q, bbox, rapido){
     relation["amenity"~"${rx}", i](${s},${w},${n},${e});
   )out center${lim};`;
 }
-
-function expandBBox(b, padDeg=0.15){
+function centerOf(b){ return {lat:(b.minlat+b.maxlat)/2, lon:(b.minlon+b.maxlon)/2}; }
+function qlAroundTags(tags, lat, lon, radius, rapido){
+  const lim = rapido? ' 300' : '';
+  const parts = tags.map(t=>`node(around:${radius},${lat},${lon})["${t.k}"="${t.v}"]; way(around:${radius},${lat},${lon})["${t.k}"="${t.v}"]; relation(around:${radius},${lat},${lon})["${t.k}"="${t.v}"];`).join('\n');
+  return `${qlHeader()}(${parts})out center${lim};`;
+}
+function qlAroundName(q, lat, lon, radius, rapido){
+  const lim = rapido? ' 300' : '';
+  const rx=esc(q);
+  return `${qlHeader()}(
+    node(around:${radius},${lat},${lon})["name"~"${rx}", i];
+    way(around:${radius},${lat},${lon})["name"~"${rx}", i];
+    relation(around:${radius},${lat},${lon})["name"~"${rx}", i];
+    node(around:${radius},${lat},${lon})["shop"~"${rx}", i];
+    way(around:${radius},${lat},${lon})["shop"~"${rx}", i];
+    relation(around:${radius},${lat},${lon})["shop"~"${rx}", i];
+    node(around:${radius},${lat},${lon})["amenity"~"${rx}", i];
+    way(around:${radius},${lat},${lon})["amenity"~"${rx}", i];
+    relation(around:${radius},${lat},${lon})["amenity"~"${rx}", i];
+  )out center${lim};`;
+}
+function expandBBox(b, padDeg=0.2){
   return {minlat:b.minlat-padDeg, minlon:b.minlon-padDeg, maxlat:b.maxlat+padDeg, maxlon:b.maxlon+padDeg};
 }
-
 function useableCount(json){
   let c=0; const els=(json&&json.elements)||[];
   for(const el of els){ const lat = el.lat || (el.center && el.center.lat); const lon = el.lon || (el.center && el.center.lon); if(lat!=null && lon!=null) c++; }
   return c;
 }
-
 function pushResults(json){
   const els=(json&&json.elements)||[];
   for(const el of els){
@@ -198,6 +231,7 @@ function pushResults(json){
 
 async function fetchBBoxByName(name){
   const q = qlAreaByName(name);
+  STATE.lastQL = q; document.getElementById('ql').value = q;
   const data = await overpassFetch(q);
   if(data && data.bounds) return data.bounds;
   if(data && data.elements && data.elements[0] && data.elements[0].bounds) return data.elements[0].bounds;
@@ -213,7 +247,7 @@ async function buscar(){
   if(!tipo) return showErr('Escriba el tipo de negocio.');
   if(!prov) return showErr('Seleccione una provincia.');
 
-  setBusy(true); setStatus('Buscando bbox…', 25);
+  setBusy(true); setStatus('Obteniendo área…', 20);
   clearMarkers(); STATE.feats=[];
 
   try{
@@ -223,16 +257,16 @@ async function buscar(){
     try{
       if(muni){ bbox = await fetchBBoxByName(muni); }
     }catch(e){ console.warn('bbox municipio falló', e); }
-    if(!bbox){
-      bbox = await fetchBBoxByName(prov);
-    }
-    // 2) consulta principal por bbox
+    if(!bbox){ bbox = await fetchBBoxByName(prov); }
+
+    // 2) consulta por bbox
     let ql = tags ? qlByBBoxTags(tags, bbox, rapido) : qlByBBoxName(tipo, bbox, rapido);
     STATE.lastQL = ql; document.getElementById('ql').value = ql;
     setStatus('Consultando Overpass…', 55);
     let data = await overpassFetch(ql);
     let added = useableCount(data);
-    // 3) si 0, expandir bbox y reintentar
+
+    // 3) si 0, ampliar bbox
     if(!added){
       const big = expandBBox(bbox, 0.25);
       ql = tags ? qlByBBoxTags(tags, big, rapido) : qlByBBoxName(tipo, big, rapido);
@@ -240,16 +274,19 @@ async function buscar(){
       setStatus('Ampliando área…', 70);
       data = await overpassFetch(ql);
       added = useableCount(data);
-      if(!added && muni){
-        // último intento: usar bbox de la provincia
-        const bboxProv = await fetchBBoxByName(prov);
-        const ql2 = tags ? qlByBBoxTags(tags, bboxProv, rapido) : qlByBBoxName(tipo, bboxProv, rapido);
-        STATE.lastQL = ql2; document.getElementById('ql').value = ql2;
-        setStatus('Probando provincia…', 80);
-        data = await overpassFetch(ql2);
-        added = useableCount(data);
-      }
     }
+
+    // 4) si aún 0, usar "around" por centro (25–40 km)
+    if(!added){
+      const c = centerOf(bbox);
+      const rad = (prov.includes('Santo Domingo') || (muni && muni.includes('Santo Domingo'))) ? 35000 : 25000;
+      ql = tags ? qlAroundTags(tags, c.lat, c.lon, rad, rapido) : qlAroundName(tipo, c.lat, c.lon, rad, rapido);
+      STATE.lastQL = ql; document.getElementById('ql').value = ql;
+      setStatus('Barriendo por radio…', 82);
+      data = await overpassFetch(ql);
+      added = useableCount(data);
+    }
+
     pushResults(data);
 
     // Render
@@ -264,10 +301,10 @@ async function buscar(){
     document.getElementById('statCount').textContent = STATE.feats.length;
     if(bounds.length){ STATE.map.fitBounds(bounds,{padding:[20,20]}); }
     setStatus(STATE.feats.length? 'Completado' : 'Sin resultados', 100);
-    if(!STATE.feats.length){ showErr('Sin datos en OSM para ese término/área. Prueba otro término o provincia.'); }
-    else showOk('Búsqueda completada.');
-  }catch(e){ console.error(e); showErr('Error Overpass: '+(e.message||e)); }
-  finally{ setBusy(false); setTimeout(()=>{document.getElementById('pbar').style.width='0%'; document.getElementById('status').textContent='Listo';},800); }
+    if(!STATE.feats.length){ showErr('Sin datos en OSM para ese término/área (o Overpass saturado). Prueba otra provincia o un sinónimo.'); }
+    else showOk('Búsqueda completada (servidor '+(STATE.lastServer||'')+').');
+  }catch(e){ console.error(e); showErr('Overpass: '+(e.message||e)); }
+  finally{ setBusy(false); setTimeout(()=>{document.getElementById('pbar').style.width='0%'; document.getElementById('status').textContent='Listo';},900); }
 }
 
 function toCSV(rows, headers){ const head=headers.join(','); const esc=v=>{if(v==null) return ''; const s=String(v); return (s.includes(',')||s.includes('\"')||s.includes('\\n'))?('\"'+s.replace(/\"/g,'\"\"')+'\"'):s;}; const body=rows.map(r=>headers.map(h=>esc(r[h])).join(',')).join('\\n'); return head+'\\n'+body; }
