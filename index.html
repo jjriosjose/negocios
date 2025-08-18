@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Negocios RD – v16 (Worker Proxy)</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <style>
+    body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:linear-gradient(180deg,#f6f8fc 0%,#eef2f7 100%);color:#0b1220}
+    .container{max-width:1200px;margin:0 auto;padding:16px}
+    .card{background:#fff;border:1px solid #e5e9f2;border-radius:16px;padding:12px;box-shadow:0 6px 16px rgba(15,23,42,.06)}
+    .grid{display:grid;gap:8px}
+    .grid-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+    select,input,button{width:100%;padding:10px;border-radius:12px;border:1px solid #d7dde8;background:#fff}
+    #map{width:100%;height:64vh;border-radius:14px;border:1px solid #dbe1ea;background:#eef2f7}
+    table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:8px 10px;border-bottom:1px solid #eef2f7;text-align:left}
+    .progress{height:10px;background:#eef2f7;border-radius:999px;overflow:hidden;border:1px solid #e5e9f2}.progress>div{height:100%;width:0%;background:linear-gradient(90deg,#10b981,#14b8a6);transition:width .25s}
+    .errbar,.okbar{position:fixed;left:8px;right:8px;bottom:8px;padding:8px 10px;border-radius:12px;display:none}
+    .errbar{background:#fde8e8;border:1px solid #f8b4b4;color:#7f1d1d}.okbar{background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46}
+    textarea{width:100%;min-height:120px;background:#0b1220;color:#e8eef9;border-radius:10px;border:1px solid #1f2937;padding:8px;display:none;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2 style="margin:0 0 10px">Negocios RD <span style="font-size:12px;color:#64748b">OSM + Overpass (Worker Proxy)</span></h2>
+
+    <div class="card">
+      <div class="grid grid-4">
+        <div>
+          <label style="font-size:12px;color:#64748b">Tipo de negocio</label>
+          <input id="qTipo" placeholder="Ej.: ferretería, farmacia, colegios..." />
+        </div>
+        <div>
+          <label style="font-size:12px;color:#64748b">Provincia</label>
+          <select id="selProv"></select>
+        </div>
+        <div>
+          <label style="font-size:12px;color:#64748b">Municipio (opcional)</label>
+          <select id="selMuni"><option value="">(todos)</option></select>
+        </div>
+        <div style="display:flex;gap:8px;align-items:end">
+          <button id="btnBuscar" style="flex:1;background:#10b981;border:0;color:#fff;border-radius:12px;padding:10px">🔎 Buscar</button>
+          <button id="btnCSV" style="flex:1">⬇ CSV</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+        <div class="progress" style="flex:1;min-width:160px"><div id="pbar"></div></div>
+        <span id="status" style="font-size:12px;color:#64748b">Listo</span>
+        <label><input type="checkbox" id="cbCluster" checked/> Clustering</label>
+        <label><input type="checkbox" id="cbRapido"/> Modo rápido</label>
+        <button id="btnVerQL">👀 Ver consulta</button>
+        <button id="btnDemo">✨ Demo</button>
+      </div>
+      <textarea id="ql"></textarea>
+    </div>
+
+    <div class="grid" style="grid-template-columns:1.2fr .8fr;gap:16px;margin-top:10px">
+      <div class="card"><div id="map"></div></div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <div style="font-size:12px;background:#eef2f7;border:1px solid #e2e8f0;border-radius:999px;padding:3px 8px">Resultados: <span id="statCount">0</span></div>
+          <div style="font-size:12px;background:#eef2f7;border:1px solid #e2e8f0;border-radius:999px;padding:3px 8px">Fuente: OpenStreetMap</div>
+        </div>
+        <div style="max-height:60vh;overflow:auto;border:1px solid #e5e9f2;border-radius:12px">
+          <table id="tbl">
+            <thead><tr><th>Nombre</th><th>Tipo</th><th>Dirección</th><th>Teléfono</th><th>Web</th><th>Lat</th><th>Lon</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="err" class="errbar"></div><div id="ok" class="okbar"></div>
+
+<script>
+const PROVINCIAS=["Azua","Bahoruco","Barahona","Dajabón","Distrito Nacional","Duarte","El Seibo","Elías Piña","Espaillat","Hato Mayor","Hermanas Mirabal","Independencia","La Altagracia","La Romana","La Vega","María Trinidad Sánchez","Monseñor Nouel","Monte Cristi","Monte Plata","Pedernales","Peravia","Puerto Plata","Samaná","San Cristóbal","San José de Ocoa","San Juan","San Pedro de Macorís","Sánchez Ramírez","Santiago","Santiago Rodríguez","Santo Domingo","Valverde"];
+const MUNICIPIOS={"Azua":["Azua de Compostela","Estebanía","Guayabal","Las Charcas","Las Yayas de Viajama","Padre Las Casas","Peralta","Pueblo Viejo","Sabana Yegua","Tábara Arriba"],"Bahoruco":["Neiba","Galván","Los Ríos","Tamayo","Villa Jaragua"],"Barahona":["Barahona","Cabral","El Peñón","Enriquillo","Fundación","Jaquimeyes","La Ciénaga","Las Salinas","Paraíso","Polo","Vicente Noble"],"Dajabón":["Dajabón","El Pino","Loma de Cabrera","Partido","Restauración"],"Distrito Nacional":["Santo Domingo de Guzmán"],"Duarte":["San Francisco de Macorís","Arenoso","Castillo","Eugenio María de Hostos","Las Guáranas","Pimentel","Villa Riva"],"El Seibo":["Santa Cruz de El Seibo","Miches"],"Elías Piña":["Comendador","Bánica","El Llano","Hondo Valle","Juan Santiago","Pedro Santana"],"Espaillat":["Moca","Cayetano Germosén","Gaspar Hernández","Jamao al Norte"],"Hato Mayor":["Hato Mayor del Rey","El Valle","Sabana de la Mar"],"Hermanas Mirabal":["Salcedo","Tenares","Villa Tapia"],"Independencia":["Jimaní","Cristóbal","Duvergé","La Descubierta","Mella","Postrer Río"],"La Altagracia":["Salvaleón de Higüey","San Rafael del Yuma"],"La Romana":["La Romana","Guaymate","Villa Hermosa"],"La Vega":["La Vega","Constanza","Jarabacoa","Jima Abajo"],"María Trinidad Sánchez":["Nagua","Cabrera","El Factor","Río San Juan"],"Monseñor Nouel":["Bonao","Maimón","Piedra Blanca"],"Monte Cristi":["San Fernando de Monte Cristi","Castañuelas","Guayubín","Las Matas de Santa Cruz","Pepillo Salcedo","Villa Vásquez"],"Monte Plata":["Monte Plata","Bayaguana","Peralvillo","Sabana Grande de Boyá","Yamasá"],"Pedernales":["Pedernales","Oviedo"],"Peravia":["Baní","Nizao"],"Puerto Plata":["San Felipe de Puerto Plata","Altamira","Guananico","Imbert","Los Hidalgos","Luperón","Sosúa","Villa Isabela","Montellano"],"Samaná":["Santa Bárbara de Samaná","Sánchez","Las Terrenas"],"San Cristóbal":["San Cristóbal","Bajos de Haina","Cambita Garabitos","Los Cacaos","Sabana Grande de Palenque","San Gregorio de Nigua","Villa Altagracia","Yaguate"],"San José de Ocoa":["San José de Ocoa","Sabana Larga","Rancho Arriba"],"San Juan":["San Juan de la Maguana","Bohechío","El Cercado","Juan de Herrera","Las Matas de Farfán","Vallejuelo"],"San Pedro de Macorís":["San Pedro de Macorís","Consuelo","Guayacanes","Quisqueya","Ramón Santana","San José de los Llanos"],"Sánchez Ramírez":["Cotuí","Cevicos","Fantino","La Mata"],"Santiago":["Santiago de los Caballeros","Bisonó (Navarrete)","Jánico","Licey al Medio","Puñal","Sabana Iglesia","San José de las Matas","Tamboril","Villa González"],"Santiago Rodríguez":["San Ignacio de Sabaneta","Los Almácigos","Monción"],"Santo Domingo":["Santo Domingo Este","Santo Domingo Norte","Santo Domingo Oeste","Boca Chica","San Antonio de Guerra","Los Alcarrizos","Pedro Brand"],"Valverde":["Mao","Esperanza","Laguna Salada"]};
+
+// Use your Cloudflare Worker URL here:
+const WORKER_URL = "https://YOUR_WORKER_SUBDOMAIN.workers.dev"; // <-- replace
+
+const KEYMAP={'colegio':[{'k':'amenity','v':'school'}],'colegios':[{'k':'amenity','v':'school'}],'escuela':[{'k':'amenity','v':'school'}],'universidad':[{'k':'amenity','v':'university'}],'hospital':[{'k':'amenity','v':'hospital'}],'clinica':[{'k':'amenity','v':'clinic'}],'clínica':[{'k':'amenity','v':'clinic'}],'farmacia':[{'k':'amenity','v':'pharmacy'},{'k':'shop','v':'chemist'}],'ferreteria':[{'k':'shop','v':'hardware'},{'k':'shop','v':'doityourself'},{'k':'shop','v':'construction_supplies'}],'ferretería':[{'k':'shop','v':'hardware'},{'k':'shop','v':'doityourself'},{'k':'shop','v':'construction_supplies'}],'papeleria':[{'k':'shop','v':'stationery'},{'k':'shop','v':'office_supplies'}],'papelería':[{'k':'shop','v':'stationery'},{'k':'shop','v':'office_supplies'}],'supermercado':[{'k':'shop','v':'supermarket'}],'colmado':[{'k':'shop','v':'convenience'}],'taller':[{'k':'shop','v':'car_repair'}],'repuestos':[{'k':'shop','v':'car_parts'}],'zapateria':[{'k':'shop','v':'shoes'}],'zapatería':[{'k':'shop','v':'shoes'}],'muebles':[{'k':'shop','v':'furniture'}],'banco':[{'k':'amenity','v':'bank'}],'hotel':[{'k':'tourism','v':'hotel'}],'veterinaria':[{'k':'amenity','v':'veterinary'}]};
+
+const STATE={map:null,cluster:null,markers:[],feats:[],lastQL:''};
+function showErr(m){const e=document.getElementById('err');e.textContent=m;e.style.display='block';setTimeout(()=>e.style.display='none',6000);}
+function showOk(m){const e=document.getElementById('ok');e.textContent=m;e.style.display='block';setTimeout(()=>e.style.display='none',2200);}
+function setStatus(t,p=null){document.getElementById('status').textContent=t;if(p!=null)document.getElementById('pbar').style.width=Math.min(100,Math.max(0,p))+'%';}
+function setBusy(b){document.querySelectorAll('button,select,input').forEach(el=>el.disabled=!!b);}
+function norm(s){return (s||'').toString().trim().toLowerCase();}
+function strip(s){return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
+function esc(s){return (s||'').replace(/[.*+?^${}()|[\\]\\]/g,'\\$&');}
+function initMap(){if(STATE.map)return;STATE.map=L.map('map').setView([18.735693,-70.162651],8);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap'}).addTo(STATE.map);}
+function ensureCluster(){if(!STATE.cluster){STATE.cluster=L.markerClusterGroup({showCoverageOnHover:false,maxClusterRadius:50});STATE.map.addLayer(STATE.cluster);}}
+function clearMarkers(){if(STATE.cluster){STATE.cluster.clearLayers();}(STATE.markers||[]).forEach(m=>{try{STATE.map.removeLayer(m);}catch{}});STATE.markers=[];}
+function addMarker(lat,lon,props){const m=L.marker([lat,lon]);const web=props.website?`<div>Web: <a href="${props.website}" target="_blank" rel="noopener">${props.website}</a></div>`:'';const tel=props.phone?`<div>Tel: ${props.phone}</div>`:'';m.bindPopup(`<strong>${props.name||'(sin nombre)'}</strong><div style="color:#64748b">${props.tipo||''}</div><div>${props.address||''}</div>${tel}${web}`);STATE.markers.push(m);if(document.getElementById('cbCluster').checked){ensureCluster();STATE.cluster.addLayer(m);}else m.addTo(STATE.map);}
+
+function qlHeader(){return "[out:json][timeout:30];";}
+function qlAreaByName(name){const rx=esc(name);return `${qlHeader()}
+area["ISO3166-1"="DO"]->.country;
+rel(area.country)["boundary"="administrative"]["name"~"^${rx}$", i];
+out ids bb;`;}
+function qlByBBoxTags(tags,b,rap){const s=b.minlat,w=b.minlon,n=b.maxlat,e=b.maxlon;const lim=rap?' 300':'';const parts=tags.map(t=>`node["${t.k}"="${t.v}"](${s},${w},${n},${e}); way["${t.k}"="${t.v}"](${s},${w},${n},${e}); relation["${t.k}"="${t.v}"](${s},${w},${n},${e});`).join('\n');return `${qlHeader()}(${parts})out center${lim};`; }
+function qlByBBoxName(q,b,rap){const s=b.minlat,w=b.minlon,n=b.maxlat,e=b.maxlon;const lim=rap?' 300':'';const rx=esc(q);return `${qlHeader()}(
+  node["name"~"${rx}", i](${s},${w},${n},${e});
+  way["name"~"${rx}", i](${s},${w},${n},${e});
+  relation["name"~"${rx}", i](${s},${w},${n},${e});
+  node["shop"~"${rx}", i](${s},${w},${n},${e});
+  way["shop"~"${rx}", i](${s},${w},${n},${e});
+  relation["shop"~"${rx}", i](${s},${w},${n},${e});
+  node["amenity"~"${rx}", i](${s},${w},${n},${e});
+  way["amenity"~"${rx}", i](${s},${w},${n},${e});
+  relation["amenity"~"${rx}", i](${s},${w},${n},${e});
+)out center${lim};`; }
+function expandBBox(b,p=0.25){return {minlat:b.minlat-p,minlon:b.minlon-p,maxlat:b.maxlat+p,maxlon:b.maxlon+p};}
+async function overpassViaWorker(ql){const url=WORKER_URL + (ql.length<1800? ('?data='+encodeURIComponent(ql)) : '');const resp= await fetch(url,{method: ql.length<1800?'GET':'POST',headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','Accept':'application/json'},body: ql.length<1800? null : ('data='+encodeURIComponent(ql))});if(!resp.ok) throw new Error('Proxy '+resp.status);return resp.json();}
+
+function usableCount(json){let c=0;const els=(json&&json.elements)||[];for(const el of els){const lat=el.lat||(el.center&&el.center.lat);const lon=el.lon||(el.center&&el.center.lon);if(lat!=null&&lon!=null)c++;}return c;}
+function pushResults(json){const els=(json&&json.elements)||[];for(const el of els){const lat=el.lat||(el.center&&el.center.lat);const lon=el.lon||(el.center&&el.center.lon);if(lat==null||lon==null)continue;const t=el.tags||{};STATE.feats.push({name:t.name||'',tipo:t.shop||t.amenity||'',address:[t['addr:street'],t['addr:housenumber']].filter(Boolean).join(' ')||t['addr:full']||'',phone:t['phone']||t['contact:phone']||'',website:t['website']||t['contact:website']||'',lat:+lat,lon:+lon});}}
+
+async function fetchBBoxByName(name){const q=qlAreaByName(name);STATE.lastQL=q;document.getElementById('ql').value=q;const data=await overpassViaWorker(q);if(data&&data.bounds)return data.bounds;if(data&&data.elements&&data.elements[0]&&data.elements[0].bounds)return data.elements[0].bounds;throw new Error('Sin bbox para '+name);}
+
+async function buscar(){
+  initMap();
+  const tipo=document.getElementById('qTipo').value.trim();
+  const prov=document.getElementById('selProv').value;
+  const muni=document.getElementById('selMuni').value||'';
+  const rapido=document.getElementById('cbRapido').checked;
+  if(!tipo) return showErr('Escriba el tipo de negocio.');
+  if(!prov) return showErr('Seleccione una provincia.');
+  setBusy(true); setStatus('Obteniendo área…',20); clearMarkers(); STATE.feats=[];
+  try{
+    const tags=KEYMAP[strip(norm(tipo))]||null;
+    let bbox=null; try{ if(muni){ bbox=await fetchBBoxByName(muni);} }catch(e){ console.warn('bbox municipio',e); }
+    if(!bbox){ bbox=await fetchBBoxByName(prov); }
+
+    let ql= tags? qlByBBoxTags(tags,bbox,rapido) : qlByBBoxName(tipo,bbox,rapido);
+    STATE.lastQL=ql; document.getElementById('ql').value=ql;
+    setStatus('Consultando Overpass (proxy)…',55);
+    let data=await overpassViaWorker(ql);
+    let added=usableCount(data);
+
+    if(!added){
+      const big=expandBBox(bbox,0.25);
+      ql= tags? qlByBBoxTags(tags,big,rapido) : qlByBBoxName(tipo,big,rapido);
+      STATE.lastQL=ql; document.getElementById('ql').value=ql;
+      setStatus('Ampliando área…',70);
+      data=await overpassViaWorker(ql);
+      added=usableCount(data);
+    }
+
+    pushResults(data);
+    const tb=document.querySelector('#tbl tbody'); tb.innerHTML=''; let bounds=[];
+    STATE.feats.forEach(f=>{const tr=document.createElement('tr'); tr.innerHTML=`<td>${f.name||''}</td><td>${f.tipo||''}</td><td>${f.address||''}</td><td>${f.phone||''}</td><td>${f.website?`<a href="${f.website}" target="_blank" rel="noopener">link</a>`:''}</td><td>${f.lat.toFixed(6)}</td><td>${f.lon.toFixed(6)}</td>`; tr.style.cursor='pointer'; tr.addEventListener('click',()=>STATE.map.setView([f.lat,f.lon],17)); tb.appendChild(tr); addMarker(f.lat,f.lon,f); bounds.push([f.lat,f.lon]); });
+    document.getElementById('statCount').textContent=STATE.feats.length;
+    if(bounds.length){ STATE.map.fitBounds(bounds,{padding:[20,20]}); }
+    setStatus(STATE.feats.length?'Completado':'Sin resultados',100);
+    if(!STATE.feats.length){ showErr('Sin datos en OSM para ese término/área.'); } else { showOk('Búsqueda completada'); }
+  }catch(e){ console.error(e); showErr('Proxy/Overpass: '+(e.message||e)); }
+  finally{ setBusy(false); setTimeout(()=>{document.getElementById('pbar').style.width='0%'; document.getElementById('status').textContent='Listo';},900); }
+}
+
+function toCSV(rows, headers){ const head=headers.join(','); const esc=v=>{if(v==null) return ''; const s=String(v); return (s.includes(',')||s.includes('\"')||s.includes('\\n'))?('\"'+s.replace(/\"/g,'\"\"')+'\"'):s;}; const body=rows.map(r=>headers.map(h=>esc(r[h])).join(',')).join('\\n'); return head+'\\n'+body; }
+document.addEventListener('DOMContentLoaded', ()=>{
+  initMap();
+  const selP=document.getElementById('selProv'); selP.innerHTML='<option value="">(seleccione)</option>'+PROVINCIAS.map(p=>`<option value="${p}">${p}</option>`).join('');
+  selP.addEventListener('change',()=>{const l=MUNICIPIOS[selP.value]||[]; document.getElementById('selMuni').innerHTML='<option value="">(todos)</option>'+l.map(n=>`<option value="${n}">${n}</option>`).join(''); });
+  document.getElementById('btnBuscar').addEventListener('click', buscar);
+  document.getElementById('btnCSV').addEventListener('click', ()=>{ if(!STATE.feats.length) return showErr('No hay resultados.'); const csv=toCSV(STATE.feats,['name','tipo','address','phone','website','lat','lon']); const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='negocios_rd.csv'; a.click(); });
+  document.getElementById('btnVerQL').addEventListener('click',()=>{ const t=document.getElementById('ql'); t.style.display = (t.style.display==='none'||t.style.display==='')?'block':'none'; t.value=STATE.lastQL||'(Aún no generada)'; });
+  document.getElementById('btnDemo').addEventListener('click',()=>{ document.getElementById('qTipo').value='farmacia'; selP.value='Santo Domingo'; document.getElementById('selMuni').innerHTML='<option value="">(todos)</option>'+MUNICIPIOS['Santo Domingo'].map(n=>`<option value="${n}">${n}</option>`).join(''); buscar(); });
+});
+</script>
+</body>
+</html>
