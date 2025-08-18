@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Negocios RD – v25 (fuzzy+amplio+Google Maps)</title>
+  <title>Negocios RD – jr1.1</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
@@ -34,7 +34,6 @@
     .okbar{background:#ecfdf5; border:1px solid #a7f3d0; color:#065f46;}
     .progress{height:10px; background:#eef2f7; border-radius:999px; overflow:hidden; border:1px solid #e5e9f2;}
     .progress > div{height:100%; width:0%; background:linear-gradient(90deg,#10b981,#14b8a6); transition:width .25s;}
-    textarea{width:100%; min-height:120px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size:12px; background:#0b1220; color:#e8eef9; border-radius:10px; border:1px solid #1f2937; padding:8px; display:none;}
     .chips{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
     .pill{font-size:11px; padding:2px 6px; border-radius:999px; border:1px solid #e2e8f0; background:#f8fafc; color:#334155;}
     .a{color:#0ea5e9; text-decoration:none;} .a:hover{text-decoration:underline;}
@@ -49,9 +48,7 @@
   <div class="container">
     <div class="title">
       <h2 style="margin:0">Negocios RD</h2>
-      <span class="badge">“Cualquier palabra” + país completo + rutas Google</span>
-      <span class="badge">100% gratis · GitHub Pages</span>
-      <span id="src" class="pill" title="mirror Overpass usado"></span>
+      <span class="badge">versión jr1.1</span>
     </div>
 
     <!-- Filtros -->
@@ -78,16 +75,13 @@
         <div class="progress" style="flex:1; min-width:160px;"><div id="pbar"></div></div>
         <span id="status" class="muted">Listo</span>
         <label><input type="checkbox" id="cbCluster" checked/> Clustering</label>
-        <label><input type="checkbox" id="cbRapido"/> Modo rápido</label>
+        <label><input type="checkbox" id="cbRapido" checked/> Modo rápido</label>
         <label class="muted">Filtro:</label>
         <label><input type="checkbox" id="cbTel"/> Con teléfono</label>
         <label><input type="checkbox" id="cbWeb"/> Con web</label>
         <button id="btnGPS" class="btn" title="Usar mi ubicación para rutas">📍 GPS</button>
-        <button id="btnVerQL" class="btn">👀 Ver consulta</button>
-        <button id="btnDemo" class="btn">✨ Demo</button>
       </div>
       <div class="muted" style="margin-top:6px;">Vacía <b>Provincia</b> para buscar en todo el país. El buscador tolera plurales, acentos y espacios: <i>ferreterias</i> ≈ <i>ferretería</i>, <i>super mercado</i> ≈ <i>supermercado</i>, etc.</div>
-      <textarea id="ql"></textarea>
     </div>
 
     <!-- Mapa arriba, lista debajo -->
@@ -139,7 +133,7 @@ const KEYMAP={
 };
 
 // ====== Claves texto libre muy amplias ======
-const FREE_KEYS=["name","alt_name","short_name","official_name","brand","operator","description","shop","amenity","craft","office","tourism","leisure","healthcare","cuisine","man_made","industrial","sport","product","subject","building","landuse"];
+const FREE_KEYS=["name","alt_name","short_name","official_name","brand","operator","description","shop","amenity","craft","office","tourism","leisure","healthcare","cuisine","man_made","industrial","sport","product","subject","building","landuse","highway","place","railway","waterway","natural","aeroway","boundary"];
 
 // Amenidades genéricas para “todos”
 const BUSINESS_AMENITIES=["bank","bar","cafe","car_rental","car_wash","clinic","dentist","doctor","fast_food","fuel","hairdresser","hospital","ice_cream","internet_cafe","optician","pharmacy","post_office","pub","restaurant","telecommunication","theatre","veterinary"];
@@ -157,7 +151,6 @@ function setBusy(b){document.querySelectorAll('button,select,input').forEach(el=
 function norm(s){return (s||'').toString().trim().toLowerCase();}
 function strip(s){return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
 function esc(s){return (s||'').replace(/[.*+?^${}()|[\\]\\]/g,'\\$&');}
-function shortHost(u){try{const url=new URL(u);return url.hostname;}catch{return u;}}
 
 // Mapa
 function initMap(){ if(STATE.map) return; const RD=[18.735693,-70.162651]; STATE.map=L.map('map').setView(RD,8); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap'}).addTo(STATE.map); }
@@ -193,14 +186,8 @@ function makeRegexFromQuery(q){
   const tokens = base.split(/\s+/);
   let core = tokens.map(t=>accentFoldRegex(t)).join('.*');
   core += '(e?s)?';
-  // casos especiales: concretera
-  if(/concret|hormigon|hormig|ready ?mix/.test(base)){
-    core = '(concret|hormig[oó]n|premezclad|ready ?mix)';
-  }
-  // supermercados: tolerar “super mercado”
-  if(/super ?mercad/.test(base)){
-    core = 'super[- ]?mercad';
-  }
+  if(/concret|hormigon|hormig|ready ?mix/.test(base)){ core = '(concret|hormig[oó]n|premezclad|ready ?mix)'; }
+  if(/super ?mercad/.test(base)){ core = 'super[- ]?mercad'; }
   return core;
 }
 
@@ -211,15 +198,13 @@ function byBBoxTagsOrName(q, tags, b, rapido){
   if(tags && tags.length){
     parts.push(tags.map(t=>`node["${t.k}"="${t.v}"](${s},${w},${n},${e}); way["${t.k}"="${t.v}"](${s},${w},${n},${e}); relation["${t.k}"="${t.v}"](${s},${w},${n},${e});`).join('\n'));
   }
-  // texto libre en múltiples claves
   const free =
     [`node["name"~"${rx}",i](${s},${w},${n},${e});`,`way["name"~"${rx}",i](${s},${w},${n},${e});`,`relation["name"~"${rx}",i](${s},${w},${n},${e});`]
-    .concat(FREE_KEYS.filter(k => k!=="name").map(key=>`node["${key}"~"${rx}", i](${s},${w},${n},${e}); way["${key}"~"${rx}", i](${s},${w},${n},${e}); relation["${key}"~"${rx}", i](${s},${w},${n},${e});`)).join('\n');
+    .concat(FREE_KEYS.filter(key => key!=="name").map(key=>`node["${key}"~"${rx}", i](${s},${w},${n},${e}); way["${key}"~"${rx}", i](${s},${w},${n},${e}); relation["${key}"~"${rx}", i](${s},${w},${n},${e});`)).join('\n');
   parts.push(free);
   return header()+blockOut(parts.join('\n'),rapido);
 }
 
-// búsqueda “solo por nombre” (más agresiva)
 function byBBoxNameOnly(q, b, rapido){
   const s=b.minlat,w=b.minlon,n=b.maxlat,e=b.maxlon;
   const rx=makeRegexFromQuery(q);
@@ -229,7 +214,17 @@ relation["name"~"${rx}", i](${s},${w},${n},${e});`;
   return header()+blockOut(body,rapido);
 }
 
-// búsqueda amplia pero acotada por claves típicas
+function byBBoxAnyTag(q,b,rapido){
+  const s=b.minlat,w=b.minlon,n=b.maxlat,e=b.maxlon;
+  const rx=makeRegexFromQuery(q);
+  const KEY_RE='^(name|alt_name|short_name|official_name|brand|operator|description|shop|amenity|craft|office|tourism|leisure|healthcare|cuisine|man_made|industrial|sport|product|subject|building|landuse|aeroway|aerialway|barrier|boundary|highway|historic|internet_access|place|public_transport|railway|route|waterway|natural|emergency|education|historic|heritage|payment:.*|contact:.*)$';
+  const body=[
+    `node(${s},${w},${n},${e})[~"${KEY_RE}"~"${rx}", i];`,
+    `way(${s},${w},${n},${e})[~"${KEY_RE}"~"${rx}", i];`,
+    `relation(${s},${w},${n},${e})[~"${KEY_RE}"~"${rx}", i];`
+  ].join('\n');
+  return header()+blockOut(body,rapido);
+}
 function byBBoxWideKeys(q,b,rapido){
   const s=b.minlat,w=b.minlon,n=b.maxlat,e=b.maxlon;
   const rx=makeRegexFromQuery(q);
@@ -294,7 +289,7 @@ async function overpassAll(ql){
   const wrapped=[]; for(const w of WRAPS){ for(const b of OVERPASS){ wrapped.push(w+b.replace(/^https?:\/\//,'')+short);} }
   const all=primary.concat(wrapped);
   let last=null;
-  for(const u of all){ try{ const data=await fetchAny(u); STATE.server=u; document.getElementById('src').textContent=shortHost(u); return data; }catch(e){ last=e; } }
+  for(const u of all){ try{ const data=await fetchAny(u); STATE.server=u; return data; }catch(e){ last=e; } }
   throw last||new Error('Overpass unreachable');
 }
 
@@ -309,7 +304,7 @@ async function getCountryBBox(){
   return FALLBACK_RD_BBOX;
 }
 async function getBBox(name){
-  const q=areaByName(name); STATE.lastQL=q; document.getElementById('ql').value=q;
+  const q=areaByName(name);
   try{
     const d=await overpassAll(q);
     if(d && d.bounds) return d.bounds;
@@ -336,8 +331,6 @@ document.addEventListener('DOMContentLoaded',()=>{
   selP.addEventListener('change',()=>{const l=MUNICIPIOS[selP.value]||[]; document.getElementById('selMuni').innerHTML='<option value="">(todos)</option>'+l.map(n=>`<option value="${n}">${n}</option>`).join('');});
   document.getElementById('btnBuscar').addEventListener('click',buscar);
   document.getElementById('btnCSV').addEventListener('click',()=>{ if(!STATE.feats.length) return showErr('No hay resultados.'); const headers=['name','tipo','address','phone','website','brand','operator','hours','lat','lon']; const csv=[headers.join(',')].concat(STATE.feats.map(r=>headers.map(h=>{const v=(r[h]??'').toString(); return (/[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v)}).join(','))).join('\n'); const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='negocios_rd.csv'; a.click(); });
-  document.getElementById('btnVerQL').addEventListener('click',()=>{ const t=document.getElementById('ql'); t.style.display=(t.style.display==='none'||t.style.display==='')?'block':'none'; });
-  document.getElementById('btnDemo').addEventListener('click',()=>{ document.getElementById('qTipo').value='ferreterias'; buscar(); });
   document.getElementById('btnGPS').addEventListener('click', enableGPS);
 });
 
@@ -360,25 +353,13 @@ async function buscar(){
     const mapped=KEYMAP[norm(tipo)] || KEYMAP[strip(tipo)];
     let ql = isAll ? byBBoxAll(bbox,true) : byBBoxTagsOrName(tipo, mapped, bbox, rapido);
 
-    STATE.lastQL=ql; document.getElementById('ql').value=ql; setStatus('Consultando Overpass…',50);
+    setStatus('Consultando Overpass…',50);
     let data=await overpassAll(ql); let added=usableCount(data);
 
-    if(!added){ // intento 2: nombre solamente
-      ql = byBBoxNameOnly(tipo, bbox, true);
-      STATE.lastQL=ql; document.getElementById('ql').value=ql; setStatus('Nombre exacto/amplio…',68);
-      data=await overpassAll(ql); added=usableCount(data);
-    }
-    if(!added){ // intento 3: claves acotadas + name
-      ql = byBBoxWideKeys(tipo, bbox, true);
-      STATE.lastQL=ql; document.getElementById('ql').value=ql; setStatus('Claves típicas…',80);
-      data=await overpassAll(ql); added=usableCount(data);
-    }
-    if(!added){ // intento 4: barrido radial
-      const c=centerOf(bbox); const r=prov?45000:70000;
-      ql = aroundTagsOrName(tipo, mapped, c, r, true);
-      STATE.lastQL=ql; document.getElementById('ql').value=ql; setStatus('Barriendo por radio…',92);
-      data=await overpassAll(ql); added=usableCount(data);
-    }
+    if(!added){ ql = byBBoxAnyTag(tipo, bbox, true); setStatus('Cualquier clave…',62); data=await overpassAll(ql); added=usableCount(data); }
+    if(!added){ ql = byBBoxNameOnly(tipo, bbox, true); setStatus('Nombre exacto/amplio…',74); data=await overpassAll(ql); added=usableCount(data); }
+    if(!added){ ql = byBBoxWideKeys(tipo, bbox, true); setStatus('Claves típicas…',80); data=await overpassAll(ql); added=usableCount(data); }
+    if(!added){ const c=centerOf(bbox); const r=prov?45000:70000; ql = aroundTagsOrName(tipo, mapped, c, r, true); setStatus('Barriendo por radio…',92); data=await overpassAll(ql); added=usableCount(data); }
 
     pushResults(data);
 
